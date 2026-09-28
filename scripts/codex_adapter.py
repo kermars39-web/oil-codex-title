@@ -204,12 +204,19 @@ SCHEMA = {
 }
 
 
+def strip_category_icon(title):
+    """只移除插件的类别前缀，不改对象与目标文字。"""
+    return re.sub(r"^(?:🎬|🧩|🔎|📝|📅|🎨|⚙\ufe0f?|💬|🛠\ufe0f?)\s*", "", title)
+
+
 def normalize_project_prefix(candidate, context):
     """去掉与外层目录精确等价的重复前缀，不猜项目别名或修改 keep。"""
     hint = re.sub(r"[\W_]+", "", context.get("project_hint", ""))
     if candidate.get("action") != "rename" or not hint or " " not in candidate.get("title", ""):
         return candidate
-    emoji, body = candidate["title"].split(" ", 1)
+    original = candidate["title"]
+    body = strip_category_icon(original)
+    prefix = original[:len(original) - len(body)]
     # 兼容 kite-lms、Kite LMS、KiteLMS，不把 Maple 错当成 MaplePay。
     pattern = r"^" + r"[\s._-]*".join(re.escape(c) for c in hint) + r"\s+(.+)$"
     match = re.match(pattern, body, re.IGNORECASE)
@@ -218,7 +225,7 @@ def normalize_project_prefix(candidate, context):
     remaining = match.group(1).strip()
     if len(remaining) < 2 or re.match(r"^(与|和|到|及|→|->|vs\b|to\b)", remaining, re.IGNORECASE):
         return candidate
-    return {**candidate, "title": emoji + " " + remaining}
+    return {**candidate, "title": prefix + remaining}
 
 
 def _generate_title_once(binary, config, context, plugin_root, *, before_model=None):
@@ -231,6 +238,7 @@ def _generate_title_once(binary, config, context, plugin_root, *, before_model=N
     if all(re.sub(r"[\W_]+", "", text).casefold() in trivial for text in user_texts):
         return {"action": "keep", "title": context.get("current_title", ""),
                 "reason": "只有问候或确认，缺少新的命名依据"}, {}
+    context = {**context, "title_style": config.get("title_style", "emoji")}
     result, usage = generate_json(binary, config, context, plugin_root / "prompts/naming.md", SCHEMA,
                                  before_model=before_model)
     return normalize_project_prefix(result, context), usage
@@ -299,7 +307,8 @@ def generate_title(binary, config, context, plugin_root, *, before_model=None):
     deadline = time.monotonic() + config.get("model_timeout_seconds", 100)
     candidate, usage = _generate_title_once(binary, config, context, plugin_root, before_model=before_model)
     current = context.get("current_title", "")
-    legacy = current.count("｜") != 1 or current.startswith("🛠")
+    style = config.get("title_style", "emoji")
+    legacy = current.count("｜") != 1 or (style == "emoji" and current.startswith("🛠"))
     # 模型偶尔误把旧标题判断为结构合规。只复核一次，不自行猜对象或强制改名。
     # 问候过滤不调用模型且无 usage，仍然直接保留。
     remaining = deadline - time.monotonic()
@@ -308,7 +317,7 @@ def generate_title(binary, config, context, plugin_root, *, before_model=None):
         retry_config = {**config, "model_timeout_seconds": remaining}
         candidate, retry_usage = _generate_title_once(binary, retry_config, {
             **context,
-            "naming_feedback": "原标题尚未符合 emoji 对象｜目标结构，或仍使用旧开发图标。请重新核对：有明确对象和目标时只迁移格式，保留准确主线；只有依据不足时 keep。不要误称旧格式已合规。",
+            "naming_feedback": "原标题尚未符合当前 title_style 要求的对象｜目标结构。请重新核对：有明确对象和目标时只迁移格式，保留准确主线；只有依据不足时 keep。不要误称旧格式已合规。",
         }, plugin_root, before_model=before_model)
         usage = {key: usage.get(key, 0) + retry_usage.get(key, 0)
                  for key in usage.keys() | retry_usage.keys()}

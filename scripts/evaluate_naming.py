@@ -28,8 +28,9 @@ def main():
         start = time.monotonic()
         candidate, usage = None, {}
         try:
-            candidate, usage = generate_title(binary, DEFAULTS, case['context'], ROOT)
-            candidate = validate_candidate(candidate, case['context']['current_title'])
+            config = {**DEFAULTS, 'title_style': case.get('title_style', DEFAULTS['title_style'])}
+            candidate, usage = generate_title(binary, config, case['context'], ROOT)
+            candidate = validate_candidate(candidate, case['context']['current_title'], config['title_style'])
             expected = case['expected']
             errors = []
             if candidate['action'] != expected['action']: errors.append('动作不符')

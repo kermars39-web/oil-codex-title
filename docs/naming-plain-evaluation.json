@@ -1,0 +1,43 @@
+{
+  "model": "gpt-5.6-luna",
+  "service_tier": "priority",
+  "cases": 2,
+  "passed": 2,
+  "model_cases": 2,
+  "median_seconds": 13.29,
+  "notice": "确定性问候过滤与 Luna 命名的合成案例单次检查，不代表普遍准确率，也不验证桌面显示。",
+  "results": [
+    {
+      "case": "plain-migrate-chinese",
+      "action": "rename",
+      "title": "会议室预约｜冲突处理规则",
+      "reason": "去除图标，保留准确主线",
+      "passed": true,
+      "errors": [],
+      "seconds": 14.59,
+      "usage": {
+        "input_tokens": 5624,
+        "cached_input_tokens": 1792,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 39,
+        "reasoning_output_tokens": 0
+      }
+    },
+    {
+      "case": "plain-keep-english",
+      "action": "keep",
+      "title": "Email verification｜Fix expiry",
+      "reason": "现有标题准确延续修复主线",
+      "passed": true,
+      "errors": [],
+      "seconds": 12.0,
+      "usage": {
+        "input_tokens": 5597,
+        "cached_input_tokens": 1792,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 36,
+        "reasoning_output_tokens": 0
+      }
+    }
+  ]
+}

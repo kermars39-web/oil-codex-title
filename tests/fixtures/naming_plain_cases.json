@@ -1,0 +1,24 @@
+[
+  {
+    "id": "plain-migrate-chinese",
+    "title_style": "plain",
+    "context": {
+      "current_title": "📝 会议室预约｜冲突处理规则",
+      "project_hint": "park",
+      "original_goal": "请给园区会议室预约冲突写三条简短规则。",
+      "recent_turns": [{"messages": [{"role": "user", "text": "请给园区会议室预约冲突写三条简短规则。"}]}]
+    },
+    "expected": {"action": "rename", "contains": ["会议室预约"], "reject": ["📝"], "exact_title": "会议室预约｜冲突处理规则"}
+  },
+  {
+    "id": "plain-keep-english",
+    "title_style": "plain",
+    "context": {
+      "current_title": "Email verification｜Fix expiry",
+      "project_hint": "app",
+      "original_goal": "Fix the email verification expiry bug.",
+      "recent_turns": [{"messages": [{"role": "user", "text": "Add a regression test for the expiry fix."}]}]
+    },
+    "expected": {"action": "keep", "contains": ["Email verification"], "reject": ["🧩"], "exact_title": "Email verification｜Fix expiry"}
+  }
+]

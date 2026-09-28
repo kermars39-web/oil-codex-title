@@ -1,5 +1,36 @@
 # oil-codex-title
 
+> 本仓库是 [oil-oil/oil-codex-title](https://github.com/oil-oil/oil-codex-title) 的 Fork，由 [kermars39-web](https://github.com/kermars39-web) 维护纯文字标题增强。原项目由 oil 开发，原有功能、介绍与 [MIT 许可证](LICENSE) 保留。
+
+## 本 Fork 增加了什么
+
+在原有自动命名功能上，增加可持久保存的标题样式选项：
+
+| 模式 | 示例 | 行为 |
+| --- | --- | --- |
+| `emoji` | 🧩 邮箱验证码｜过期排查 | 保留上游默认样式 |
+| `plain` | 邮箱验证码｜过期排查 | 纯文字「对象｜目标」，不添加类别图标 |
+
+- 可随时切换样式，设置跨重启保留；不会改变命名模型、暂停状态、标题保护或归档策略。
+- 选择纯文字后，后续正常命名会移除旧标题中的已知类别前缀，保留对象与目标；锁定的标题仍受保护。
+- 样式贯穿模型输入、候选校验、写入前复核及后续轮次，避免再次加回图标；不会主动批量修改历史话题。
+
+维护分支为 [`feat/plain-text-titles`](https://github.com/kermars39-web/oil-codex-title/tree/feat/plain-text-titles)，`main` 保留上游基线，便于后续同步。定制代码基于上游提交 [`ae1c9e2`](https://github.com/oil-oil/oil-codex-title/commit/ae1c9e27061dfdb84dd1ce918ee3e341b58a0d3f)。
+
+安装本 Fork 并启用纯文字标题，可对 Codex 说：
+
+```text
+帮我安装 GitHub 仓库 kermars39-web/oil-codex-title 的 feat/plain-text-titles 分支，保留原有配置，并把标题样式设为 plain。检查插件与 Hook 的启用、信任状态，再验证自动命名；需要我在界面中确认的步骤，请告诉我怎么操作。
+```
+
+已安装本 Fork 时，可以直接说“以后标题不带图标”或“恢复带图标的标题”。对应配置命令为 `configure --title-style plain` / `configure --title-style emoji`，具体入口见 [Skill 使用说明](skills/oil-codex-title/SKILL.md)。未配置样式时仍沿用上游的 `emoji` 默认值。
+
+纯文字模式包含程序回归测试与[合成命名评测](docs/naming-plain-evaluation.json)。合成评测不代表所有真实话题的命名准确率；实际 Hook 触发和桌面显示需在安装环境分别验证。
+
+## 原项目介绍与原有功能
+
+以下保留原项目的功能介绍、示例、上游安装方式和使用边界；其中带图标的示例对应 `emoji` 模式。
+
 <p align="center">
   <img src="./assets/readme/hero.svg" width="840" alt="Codex 话题实时命名，更好区分。对比普通标题与带 emoji 的具体任务标题。">
 </p>

@@ -16,7 +16,7 @@ import time
 import unicodedata
 import uuid
 
-from codex_adapter import BackendError, ModelSkipped, CodexBackend, find_codex, generate_title, process_options
+from codex_adapter import BackendError, ModelSkipped, CodexBackend, find_codex, generate_title, process_options, strip_category_icon
 import file_lock
 from usage_ledger import usage_scope, usage_report
 
@@ -30,9 +30,10 @@ DEFAULTS = {
     "max_context_chars": 14000,
     "model_timeout_seconds": 100,
     "max_parallel_workers": 2,
+    "title_style": "emoji",
 }
 EMOJI = ("🎬", "🧩", "🔎", "📝", "📅", "🎨", "⚙️", "💬")
-POLICY_VERSION = 8
+POLICY_VERSION = 9
 
 
 def data_dir():
@@ -78,6 +79,8 @@ def load_config(root):
         raise ValueError("model 不能为空")
     if config["service_tier"] not in (None, "priority"):
         raise ValueError("service_tier 必须是 null（标准）或 priority（Fast）")
+    if config["title_style"] not in ("plain", "emoji"):
+        raise ValueError("title_style 必须是 plain 或 emoji")
     return config
 
 
@@ -258,7 +261,7 @@ def snapshot(thread, config):
     latest_id = turns[-1]["id"] if turns else None
     context = {"current_title": title, "project_hint": project_hint(thread),
                "original_goal": original, "recent_turns": recent}
-    signature = json.dumps({"policy_version": POLICY_VERSION, "project_hint": context["project_hint"],
+    signature = json.dumps({"policy_version": POLICY_VERSION, "title_style": config.get("title_style", "emoji"), "project_hint": context["project_hint"],
                            "latest_id": latest_id, "effective": effective[-config["recent_turns"]:]},
                            ensure_ascii=False, sort_keys=True)
     fingerprint = hashlib.sha256(signature.encode()).hexdigest()
@@ -267,7 +270,7 @@ def snapshot(thread, config):
             "context": context, "has_messages": bool(effective), "scope_key": scope_key}
 
 
-def validate_candidate(candidate, current_title):
+def validate_candidate(candidate, current_title, title_style="emoji"):
     if not isinstance(candidate, dict) or set(candidate) != {"action", "title", "reason"}:
         raise ValueError("模型输出字段无效")
     if candidate["action"] not in ("rename", "keep") or not all(
@@ -276,13 +279,21 @@ def validate_candidate(candidate, current_title):
         raise ValueError("模型输出类型无效")
     if candidate["action"] == "keep":
         candidate = {**candidate, "title": current_title}
-    else:
+    if title_style == "plain":
+        plain = strip_category_icon(candidate["title"])
+        if plain != candidate["title"]:
+            candidate = {**candidate, "action": "rename", "title": plain}
+    if candidate["action"] == "rename":
         title = candidate["title"]
-        if title != title.strip() or not 4 <= len(title) <= 48:
+        minimum = 3 if title_style == "plain" else 4
+        if title != title.strip() or not minimum <= len(title) <= 48:
             raise ValueError("标题长度或空白无效")
-        if not any(title.startswith(e + " ") for e in EMOJI):
-            raise ValueError("标题缺少允许的类别 emoji")
-        body = title.split(" ", 1)[1]
+        if title_style == "emoji":
+            if not any(title.startswith(e + " ") for e in EMOJI):
+                raise ValueError("标题缺少允许的类别 emoji")
+            body = title.split(" ", 1)[1]
+        else:
+            body = title
         if body.count("｜") != 1 or "|" in body:
             raise ValueError("标题必须采用对象｜目标结构")
         if any(not part or part != part.strip() for part in body.split("｜")):
@@ -305,7 +316,10 @@ def confirmation_only(thread, state, config):
         return 0
     current = thread.get("name") or ""
     try:
-        validate_candidate({"action": "rename", "title": current, "reason": ""}, current)
+        checked = validate_candidate({"action": "rename", "title": current, "reason": ""}, current,
+                                     config.get("title_style", "emoji"))
+        if checked["title"] != current:
+            return 0
     except ValueError:
         return 0
     turns = thread.get("turns", [])
@@ -396,7 +410,7 @@ def _process_thread(backend, generator, thread_id, root, config, *, apply=False,
                 candidate, usage = generator(before["context"])
         except ModelSkipped as exc:
             return {"status": exc.status}
-        candidate = validate_candidate(candidate, before["title"])
+        candidate = validate_candidate(candidate, before["title"], config.get("title_style", "emoji"))
         conflicts = conflicting_titles(root, thread_id, candidate["title"], before["scope_key"])
         if candidate["action"] == "rename" and conflicts:
             try:
@@ -405,7 +419,7 @@ def _process_thread(backend, generator, thread_id, root, config, *, apply=False,
                     "naming_feedback": "候选与已记录任务重名。用对话里真实的项目、模块或内容主题区分；无法区分就保留原名，不编造编号。"})
             except ModelSkipped as exc:
                 return {"status": exc.status, "usage": usage}
-            candidate = validate_candidate(candidate, before["title"])
+            candidate = validate_candidate(candidate, before["title"], config.get("title_style", "emoji"))
             usage = {key: usage.get(key, 0) + retry_usage.get(key, 0)
                      for key in usage.keys() | retry_usage.keys()}
             if candidate["action"] == "rename" and conflicting_titles(root, thread_id, candidate["title"], before["scope_key"]):
@@ -419,6 +433,8 @@ def _process_thread(backend, generator, thread_id, root, config, *, apply=False,
         fresh_config = load_config(root)
         if not fresh_config["enabled"]:
             return {"status": "disabled"}
+        if fresh_config["title_style"] != config.get("title_style", "emoji"):
+            return {"status": "configuration_changed"}
         latest_state = read_json(path)
         if latest_state.get("locked"):
             return {"status": "locked"}
@@ -502,6 +518,7 @@ def main():
     p.add_argument("--model")
     p.add_argument("--codex-bin")
     p.add_argument("--service-tier", choices=("standard", "fast"))
+    p.add_argument("--title-style", choices=("plain", "emoji"))
     for name in ("rename", "lock", "unlock"):
         p = sub.add_parser(name)
         p.add_argument("thread_id")
@@ -538,6 +555,8 @@ def main():
                     changes["codex_bin"] = find_codex(args.codex_bin)
                 if args.service_tier:
                     changes["service_tier"] = "priority" if args.service_tier == "fast" else None
+                if args.title_style:
+                    changes["title_style"] = args.title_style
             atomic_json(config_path, changes)
             print(json.dumps(load_config(root), ensure_ascii=False))
             return 0
